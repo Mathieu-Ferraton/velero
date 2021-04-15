@@ -58,7 +58,8 @@ HUGO_IMAGE := hugo-builder
 # if the 'local' rule is being run, detect the ARCH from 'go env'
 # if it wasn't specified by the caller.
 local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
-ARCH ?= linux-amd64
+#ARCH ?= linux-amd64
+ARCH ?= linux-ppc64le
 
 VERSION ?= main
 
