@@ -57,9 +57,11 @@ HUGO_IMAGE := hugo-builder
 # Which architecture to build - see $(ALL_ARCH) for options.
 # if the 'local' rule is being run, detect the ARCH from 'go env'
 # if it wasn't specified by the caller.
-local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
+
+ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
+
+#local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
 #ARCH ?= linux-amd64
-ARCH ?= linux-ppc64le
 
 VERSION ?= main
 
@@ -177,10 +179,10 @@ shell: build-dirs build-env
 		/bin/sh $(CMD)
 
 container-builder-env:
-ifneq ($(BUILDX_ENABLED), true)
-	$(error $(BUILDX_ERROR))
-endif
-	@docker buildx build \
+#ifneq ($(BUILDX_ENABLED), true)
+#	$(error $(BUILDX_ERROR))
+#endif
+	@docker build \
 	--target=builder-env \
 	--build-arg=GOPROXY=$(GOPROXY) \
 	--build-arg=PKG=$(PKG) \
@@ -190,11 +192,10 @@ endif
 	-f $(VELERO_DOCKERFILE) .
 
 container:
-ifneq ($(BUILDX_ENABLED), true)
-	$(error $(BUILDX_ERROR))
-endif
-	@docker buildx build --pull \
-	--output=type=$(BUILDX_OUTPUT_TYPE) \
+#ifneq ($(BUILDX_ENABLED), true)
+#	$(error $(BUILDX_ERROR))
+#endif
+	@docker build --pull \
 	--platform $(BUILDX_PLATFORMS) \
 	$(addprefix -t , $(IMAGE_TAGS)) \
 	--build-arg=PKG=$(PKG) \
