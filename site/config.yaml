@@ -15,6 +15,7 @@ params:
   latest: v1.6
   versions:
     - main
+    - v1.7
     - v1.6
     - v1.5
     - v1.4
@@ -55,7 +56,7 @@ params:
       url: https://groups.google.com/forum/#!forum/projectvelero
     - title: RSS
       fa_icon: fa fa-rss
-      url: blog/index.xml
+      url: /blog/index.xml
     - title: GitHub
       fa_icon: fab fa-github
       url: https://github.com/vmware-tanzu/velero

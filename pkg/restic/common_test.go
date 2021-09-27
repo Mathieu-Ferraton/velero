@@ -37,6 +37,7 @@ func TestGetVolumeBackupsForPod(t *testing.T) {
 	tests := []struct {
 		name             string
 		podVolumeBackups []*velerov1api.PodVolumeBackup
+		podVolumes       []corev1api.Volume
 		podAnnotations   map[string]string
 		podName          string
 		sourcePodNs      string
@@ -127,6 +128,54 @@ func TestGetVolumeBackupsForPod(t *testing.T) {
 			sourcePodNs: "TestNS",
 			expected:    map[string]string{"pvbtest1-foo": "snapshot1"},
 		},
+		{
+			name: "volumes from PVBs that correspond to a pod volume from a projected source are not returned",
+			podVolumeBackups: []*velerov1api.PodVolumeBackup{
+				builder.ForPodVolumeBackup("velero", "pvb-1").PodName("TestPod").PodNamespace("TestNS").SnapshotID("snapshot1").Volume("pvb-non-projected").Result(),
+				builder.ForPodVolumeBackup("velero", "pvb-1").PodName("TestPod").PodNamespace("TestNS").SnapshotID("snapshot2").Volume("pvb-projected").Result(),
+			},
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "pvb-non-projected",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "pvb-projected",
+					VolumeSource: corev1api.VolumeSource{
+						Projected: &corev1api.ProjectedVolumeSource{},
+					},
+				},
+			},
+			podName:     "TestPod",
+			sourcePodNs: "TestNS",
+			expected:    map[string]string{"pvb-non-projected": "snapshot1"},
+		},
+		{
+			name: "volumes from PVBs that correspond to a pod volume from a DownwardAPI source are not returned",
+			podVolumeBackups: []*velerov1api.PodVolumeBackup{
+				builder.ForPodVolumeBackup("velero", "pvb-1").PodName("TestPod").PodNamespace("TestNS").SnapshotID("snapshot1").Volume("pvb-non-downwardapi").Result(),
+				builder.ForPodVolumeBackup("velero", "pvb-1").PodName("TestPod").PodNamespace("TestNS").SnapshotID("snapshot2").Volume("pvb-downwardapi").Result(),
+			},
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "pvb-non-downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "pvb-downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						DownwardAPI: &corev1api.DownwardAPIVolumeSource{},
+					},
+				},
+			},
+			podName:     "TestPod",
+			sourcePodNs: "TestNS",
+			expected:    map[string]string{"pvb-non-downwardapi": "snapshot1"},
+		},
 	}
 
 	for _, test := range tests {
@@ -134,6 +183,7 @@ func TestGetVolumeBackupsForPod(t *testing.T) {
 			pod := &corev1api.Pod{}
 			pod.Annotations = test.podAnnotations
 			pod.Name = test.podName
+			pod.Spec.Volumes = test.podVolumes
 
 			res := GetVolumeBackupsForPod(test.podVolumeBackups, pod, test.sourcePodNs)
 			assert.Equal(t, test.expected, res)
@@ -507,6 +557,74 @@ func TestGetPodVolumesUsingRestic(t *testing.T) {
 			},
 			expected: []string{"resticPV1", "resticPV2", "resticPV3"},
 		},
+		{
+			name:                   "should exclude projected volumes",
+			defaultVolumesToRestic: true,
+			pod: &corev1api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						VolumesToExcludeAnnotation: "nonResticPV1,nonResticPV2,nonResticPV3",
+					},
+				},
+				Spec: corev1api.PodSpec{
+					Volumes: []corev1api.Volume{
+						{Name: "resticPV1"}, {Name: "resticPV2"}, {Name: "resticPV3"},
+						{
+							Name: "projected",
+							VolumeSource: corev1api.VolumeSource{
+								Projected: &corev1api.ProjectedVolumeSource{
+									Sources: []corev1api.VolumeProjection{{
+										Secret: &corev1api.SecretProjection{
+											LocalObjectReference: corev1api.LocalObjectReference{},
+											Items:                nil,
+											Optional:             nil,
+										},
+										DownwardAPI:         nil,
+										ConfigMap:           nil,
+										ServiceAccountToken: nil,
+									}},
+									DefaultMode: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"resticPV1", "resticPV2", "resticPV3"},
+		},
+		{
+			name:                   "should exclude DownwardAPI volumes",
+			defaultVolumesToRestic: true,
+			pod: &corev1api.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: map[string]string{
+						VolumesToExcludeAnnotation: "nonResticPV1,nonResticPV2,nonResticPV3",
+					},
+				},
+				Spec: corev1api.PodSpec{
+					Volumes: []corev1api.Volume{
+						{Name: "resticPV1"}, {Name: "resticPV2"}, {Name: "resticPV3"},
+						{
+							Name: "downwardAPI",
+							VolumeSource: corev1api.VolumeSource{
+								DownwardAPI: &corev1api.DownwardAPIVolumeSource{
+									Items: []corev1api.DownwardAPIVolumeFile{
+										{
+											Path: "labels",
+											FieldRef: &corev1api.ObjectFieldSelector{
+												APIVersion: "v1",
+												FieldPath:  "metadata.labels",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: []string{"resticPV1", "resticPV2", "resticPV3"},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -589,6 +707,124 @@ func TestIsPVBMatchPod(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual := isPVBMatchPod(&tc.pvb, tc.podName, tc.sourcePodNs)
+			assert.Equal(t, tc.expected, actual)
+		})
+
+	}
+}
+
+func TestVolumeHasNonRestorableSource(t *testing.T) {
+	testCases := []struct {
+		name       string
+		volumeName string
+		podVolumes []corev1api.Volume
+		expected   bool
+	}{
+		{
+			name:       "volume name not in list of volumes",
+			volumeName: "missing-volume",
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "restorable",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "projected",
+					VolumeSource: corev1api.VolumeSource{
+						Projected: &corev1api.ProjectedVolumeSource{},
+					},
+				},
+				{
+					Name: "downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						DownwardAPI: &corev1api.DownwardAPIVolumeSource{},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:       "volume name in list of volumes but not projected or DownwardAPI",
+			volumeName: "restorable",
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "restorable",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "projected",
+					VolumeSource: corev1api.VolumeSource{
+						Projected: &corev1api.ProjectedVolumeSource{},
+					},
+				},
+				{
+					Name: "downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						DownwardAPI: &corev1api.DownwardAPIVolumeSource{},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:       "volume name in list of volumes and projected",
+			volumeName: "projected",
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "restorable",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "projected",
+					VolumeSource: corev1api.VolumeSource{
+						Projected: &corev1api.ProjectedVolumeSource{},
+					},
+				},
+				{
+					Name: "downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						DownwardAPI: &corev1api.DownwardAPIVolumeSource{},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:       "volume name in list of volumes and is a DownwardAPI volume",
+			volumeName: "downwardapi",
+			podVolumes: []corev1api.Volume{
+				{
+					Name: "restorable",
+					VolumeSource: corev1api.VolumeSource{
+						PersistentVolumeClaim: &corev1api.PersistentVolumeClaimVolumeSource{},
+					},
+				},
+				{
+					Name: "projected",
+					VolumeSource: corev1api.VolumeSource{
+						Projected: &corev1api.ProjectedVolumeSource{},
+					},
+				},
+				{
+					Name: "downwardapi",
+					VolumeSource: corev1api.VolumeSource{
+						DownwardAPI: &corev1api.DownwardAPIVolumeSource{},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := volumeHasNonRestorableSource(tc.volumeName, tc.podVolumes)
 			assert.Equal(t, tc.expected, actual)
 		})
 

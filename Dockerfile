@@ -13,18 +13,19 @@
 # limitations under the License.
 
 #FROM --platform=$BUILDPLATFORM golang:1.15 as builder-env
-FROM library/golang:1.15 as builder-env
+FROM library/golang:1.16 as builder-env
 
 ARG GOPROXY
 ARG PKG
 ARG VERSION
 ARG GIT_SHA
 ARG GIT_TREE_STATE
+ARG REGISTRY
 
 ENV CGO_ENABLED=0 \
     GO111MODULE=on \
     GOPROXY=${GOPROXY} \
-    LDFLAGS="-X ${PKG}/pkg/buildinfo.Version=${VERSION} -X ${PKG}/pkg/buildinfo.GitSHA=${GIT_SHA} -X ${PKG}/pkg/buildinfo.GitTreeState=${GIT_TREE_STATE}"
+    LDFLAGS="-X ${PKG}/pkg/buildinfo.Version=${VERSION} -X ${PKG}/pkg/buildinfo.GitSHA=${GIT_SHA} -X ${PKG}/pkg/buildinfo.GitTreeState=${GIT_TREE_STATE} -X ${PKG}/pkg/buildinfo.ImageRegistry=${REGISTRY}"
 
 WORKDIR /go/src/github.com/vmware-tanzu/velero
 
@@ -51,13 +52,11 @@ RUN mkdir -p /output/usr/bin && \
     go build -o /output/${BIN} \
     -ldflags "${LDFLAGS}" ${PKG}/cmd/${BIN}
 
-FROM library/ubuntu:focal
+FROM gcr.io/distroless/base-debian10:nonroot
 
 LABEL maintainer="Nolan Brubaker <brubakern@vmware.com>"
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
-
 COPY --from=builder /output /
 
-USER nobody:nogroup
+USER nonroot:nonroot
 
