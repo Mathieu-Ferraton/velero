@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.15
+FROM docker.io/library/golang:1.15
 
 ARG GOPROXY
 
@@ -26,12 +26,12 @@ WORKDIR /go/src/k8s.io
 RUN git config --global advice.detachedHead false
 RUN git clone -b v0.18.4 https://github.com/kubernetes/code-generator
 
-RUN wget --quiet https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.1/kubebuilder_2.3.1_linux_amd64.tar.gz && \
-    tar -zxvf kubebuilder_2.3.1_linux_amd64.tar.gz && \
-    mv kubebuilder_2.3.1_linux_amd64 /usr/local/kubebuilder && \
+RUN wget --quiet https://github.com/kubernetes-sigs/kubebuilder/releases/download/v2.3.1/kubebuilder_2.3.1_linux_ppc64le.tar.gz && \
+    tar -zxvf kubebuilder_2.3.1_linux_ppc64le.tar.gz && \
+    mv kubebuilder_2.3.1_linux_ppc64le /usr/local/kubebuilder && \
     chmod +x /usr/local/kubebuilder && \
     export PATH=$PATH:/usr/local/kubebuilder/bin && \
-    rm kubebuilder_2.3.1_linux_amd64.tar.gz
+    rm kubebuilder_2.3.1_linux_ppc64le.tar.gz
 
 # get controller-tools
 RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.3.0
@@ -43,15 +43,18 @@ RUN go get golang.org/x/tools/cmd/goimports@11e9d9cc0042e6bd10337d4d2c3e5d929550
 # get protoc compiler and golang plugin
 WORKDIR /root
 RUN apt-get update && apt-get install -y unzip
-RUN wget --quiet https://github.com/protocolbuffers/protobuf/releases/download/v3.9.1/protoc-3.9.1-linux-x86_64.zip && \
-    unzip protoc-3.9.1-linux-x86_64.zip && \
+RUN wget --quiet https://github.com/protocolbuffers/protobuf/releases/download/v3.9.1/protoc-3.9.1-linux-ppcle_64.zip && \
+    unzip protoc-3.9.1-linux-ppcle_64.zip && \
     mv bin/protoc /usr/bin/protoc && \
     chmod +x /usr/bin/protoc
 RUN go get github.com/golang/protobuf/protoc-gen-go@v1.0.0
 
 # get goreleaser
-RUN wget --quiet https://github.com/goreleaser/goreleaser/releases/download/v0.120.8/goreleaser_Linux_x86_64.tar.gz && \
-    tar xvf goreleaser_Linux_x86_64.tar.gz && \
+RUN wget --quiet https://github.com/goreleaser/goreleaser/archive/refs/tags/v0.120.8.tar.gz && \
+    tar -zxvf v0.120.8.tar.gz && \
+    cd goreleaser-0.120.8 && \
+    go mod tidy && \
+    go build -o goreleaser . && \
     mv goreleaser /usr/bin/goreleaser && \
     chmod +x /usr/bin/goreleaser
 
@@ -59,6 +62,6 @@ RUN wget --quiet https://github.com/goreleaser/goreleaser/releases/download/v0.1
 RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.27.0
 
 # install kubectl
-RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+RUN curl -LO https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/ppc64le/kubectl
 RUN chmod +x ./kubectl
 RUN mv ./kubectl /usr/local/bin
