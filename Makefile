@@ -21,7 +21,7 @@ BIN ?= velero
 PKG := github.com/vmware-tanzu/velero
 
 # Where to push the docker image.
-REGISTRY ?= velero
+REGISTRY ?= quay.io/mferrato
 
 # Image name
 IMAGE ?= $(REGISTRY)/$(BIN)
@@ -58,9 +58,10 @@ HUGO_IMAGE := hugo-builder
 # if the 'local' rule is being run, detect the ARCH from 'go env'
 # if it wasn't specified by the caller.
 local : ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
-ARCH ?= linux-amd64
+#ARCH ?= linux-amd64
+ARCH ?= $(shell go env GOOS)-$(shell go env GOARCH)
 
-VERSION ?= main
+VERSION ?= ppc64le-1.6.3
 
 TAG_LATEST ?= false
 
