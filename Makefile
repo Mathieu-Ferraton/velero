@@ -178,10 +178,7 @@ shell: build-dirs build-env
 		/bin/sh $(CMD)
 
 container-builder-env:
-ifneq ($(BUILDX_ENABLED), true)
-	$(error $(BUILDX_ERROR))
-endif
-	@docker buildx build \
+	@docker build \
 	--target=builder-env \
 	--build-arg=GOPROXY=$(GOPROXY) \
 	--build-arg=PKG=$(PKG) \
@@ -192,13 +189,10 @@ endif
 	-f $(VELERO_DOCKERFILE) .
 
 container:
-ifneq ($(BUILDX_ENABLED), true)
-	$(error $(BUILDX_ERROR))
-endif
-	@docker buildx build --pull \
-	--output=type=$(BUILDX_OUTPUT_TYPE) \
-	--platform $(BUILDX_PLATFORMS) \
+	@docker build \
 	$(addprefix -t , $(IMAGE_TAGS)) \
+        --build-arg=TARGETOS=$(shell go env GOOS) \
+        --build-arg=TARGETARCH=$(shell go env GOARCH) \
 	--build-arg=PKG=$(PKG) \
 	--build-arg=BIN=$(BIN) \
 	--build-arg=VERSION=$(VERSION) \
